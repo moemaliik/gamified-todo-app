@@ -150,6 +150,27 @@ test('recordCompletion only increments once per calendar day', () => {
   assert.strictEqual(r2.streak.current, 1);
 });
 
+test('a real break resets in-progress shield-regen credit to 0 (no dead-streak carryover)', () => {
+  // Shield already consumed, 4 days into the 7-day regen count.
+  const s = { current: 6, lastActiveDayKey: '2024-01-10', shieldAvailable: false, activeDaysSinceShieldUse: 4 };
+  // Two more days missed -> real break (shield can't cover a multi-day gap).
+  const { streak } = streakLib.resolveMissedDays(s, '2024-01-13');
+  assert.strictEqual(streak.current, 0);
+  assert.strictEqual(streak.activeDaysSinceShieldUse, 0);
+});
+
+test('while already holding a shield, active days never bank toward a second one (hard cap of 1)', () => {
+  let s = streakLib.initialStreakState(); // shieldAvailable: true from the start
+  let day = new Date('2024-02-01');
+  for (let i = 0; i < 10; i++) {
+    const result = streakLib.recordCompletion(s, streakLib.dayKey(day));
+    s = result.streak;
+    day = new Date(day.getTime() + 86400000);
+  }
+  assert.strictEqual(s.shieldAvailable, true);
+  assert.strictEqual(s.activeDaysSinceShieldUse, 0, 'counter never advances while a shield is already held');
+});
+
 console.log('achievements.cjs');
 test('First Steps unlocks at 1 completed task, not before', () => {
   const statsBefore = { tasksCompletedTotal: 0, currentStreak: 0, currentLevel: 1, shieldUsedCount: 0 };
