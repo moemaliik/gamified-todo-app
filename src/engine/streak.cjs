@@ -13,9 +13,14 @@
 //   missed day, never a multi-day gap. (Confirmed design call, posted to
 //   the team: a shield is not a multi-day buffer.)
 // - The shield regenerates after 7 consecutive active days following the
-//   day it was consumed. This is our interpretation of "regenerates after
-//   7 consecutive active days" since the spec didn't pin an exact anchor
-//   point — flagged to @ux-designer for confirmation.
+//   day it was consumed (the missed day itself doesn't count). CONFIRMED
+//   by @ux-designer: if another day is missed before hitting 7 and a
+//   shield is available, it just consumes again and the counter restarts
+//   at 0; if a real break happens instead, the regen counter also resets
+//   to 0 (no partial credit carried on a dead streak). Hard-capped at 1
+//   shield held — progress never banks toward a second one while already
+//   holding one (recordCompletion only advances the counter when
+//   shieldAvailable is false).
 //
 // Dates are represented as "day keys" — YYYY-MM-DD strings in LOCAL time —
 // so callers control timezone handling explicitly instead of this module
@@ -78,8 +83,12 @@ function resolveMissedDays(streak, todayKey) {
 
   // Either more than one day was missed (shield can't cover a multi-day
   // gap), or exactly one day was missed but no shield was available.
+  // Per @ux-designer's clarification: a real break also zeroes any
+  // in-progress shield-regen credit — a user isn't left owing partial
+  // shield progress on a dead streak. (shieldAvailable is left as-is:
+  // if it was already true going into this break, it stays true.)
   const previousStreak = streak.current;
-  const next = { ...streak, current: 0 };
+  const next = { ...streak, current: 0, activeDaysSinceShieldUse: 0 };
   return { streak: next, event: 'broken', previousStreak };
 }
 
