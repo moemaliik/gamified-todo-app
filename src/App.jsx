@@ -5,6 +5,7 @@ import TaskForm from './components/TaskForm.jsx';
 import LevelHeader from './components/LevelHeader.jsx';
 import StreakDisplay from './components/StreakDisplay.jsx';
 import AchievementsGallery from './components/AchievementsGallery.jsx';
+import SettingsPanel from './components/SettingsPanel.jsx';
 import ToastStack from './components/ToastStack.jsx';
 import useToastQueue from './state/useToastQueue.js';
 
@@ -14,6 +15,8 @@ export default function App() {
   const [streak, setStreak] = useState(null);
   const [achievementDefs, setAchievementDefs] = useState([]);
   const [unlockedAchievements, setUnlockedAchievements] = useState({});
+  const [settings, setSettings] = useState({ muted: false, volume: 0.8, streakTickEnabled: true });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [view, setView] = useState('quests'); // 'quests' | 'achievements'
@@ -40,6 +43,7 @@ export default function App() {
     refresh();
     refreshAchievements();
     window.api.getAchievementDefinitions().then(setAchievementDefs);
+    window.api.getSettings().then(setSettings);
 
     // Engine event listeners, matching the locked contract from
     // @game-logic-engineer (now the real engine, swapped in for M2).
@@ -104,10 +108,15 @@ export default function App() {
     refresh();
   };
 
+  const handleUpdateSettings = async (patch) => {
+    const next = await window.api.updateSettings(patch);
+    setSettings(next);
+  };
+
   return (
     <div className="app-shell">
       <div className="header-row">
-        <LevelHeader player={player} />
+        <LevelHeader player={player} onOpenSettings={() => setSettingsOpen(true)} />
         <StreakDisplay streak={streak} justBroken={justBroken} />
       </div>
 
@@ -155,6 +164,17 @@ export default function App() {
             initial={editingTask}
             onSave={handleSaveTask}
             onCancel={() => { setFormOpen(false); setEditingTask(null); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {settingsOpen && (
+          <SettingsPanel
+            key="settings-panel"
+            settings={settings}
+            onUpdate={handleUpdateSettings}
+            onClose={() => setSettingsOpen(false)}
           />
         )}
       </AnimatePresence>

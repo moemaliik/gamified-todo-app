@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function LevelHeader({ player }) {
+export default function LevelHeader({ player, onOpenSettings }) {
   const threshold = 100 * player.currentLevel;
   const pct = Math.min(100, Math.round((player.totalXp / threshold) * 100));
 
@@ -13,6 +13,9 @@ export default function LevelHeader({ player }) {
         </div>
         <div className="xp-label">{player.totalXp}/{threshold} XP</div>
       </div>
+      <button className="settings-gear" onClick={onOpenSettings} aria-label="Settings" title="Settings">
+        ⚙️
+      </button>
     </div>
   );
 }
