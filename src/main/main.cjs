@@ -1,19 +1,16 @@
 // Electron main process entry point.
 //
-// NOTE (temporary, M1 scaffold): the real engine (CRUD + XP/streak/achievement
-// logic + event emitter) is owned by @game-logic-engineer on branch `engine-m1`
-// per the locked architecture decision (single writer to the data file, engine
-// runs in main process, UI talks to it over IPC only).
-//
-// Until that branch merges, this file wires IPC to `./mockEngine.cjs`, a
-// drop-in stand-in that implements the EXACT same function signatures and
-// event names from the agreed contract, so the UI can be built/tested against
-// a real IPC round-trip now instead of waiting. Swapping to the real engine
-// should be a one-line require() change below — nothing in the UI should need
-// to change if the contract is honored.
+// M2: swapped from the temporary src/main/mockEngine.cjs to the real engine
+// (src/engine, @game-logic-engineer, PR #2 — CRUD, XP/leveling, streaks with
+// forgiveness shield, 8 achievements, 19 passing unit tests) now that it's
+// merged to develop. This was the one-line require() change both sides
+// pre-wired for; no other renderer/IPC-contract code needed to change.
+// mockEngine.cjs is deleted (see git history on ui-m1 for the M1 placeholder
+// if ever needed for reference).
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const engine = require('./mockEngine.cjs');
+const engine = require('../engine/index.cjs');
+const { ACHIEVEMENTS } = require('../engine/achievements.cjs');
 
 let mainWindow;
 
@@ -72,6 +69,11 @@ ipcMain.handle('tasks:update', (_evt, id, patch) => engine.updateTask(id, patch)
 ipcMain.handle('tasks:delete', (_evt, id) => engine.deleteTask(id));
 ipcMain.handle('tasks:complete', (_evt, id) => engine.completeTask(id));
 ipcMain.handle('player:getState', () => engine.getPlayerState());
+ipcMain.handle('streak:getState', () => engine.getStreakState());
+ipcMain.handle('achievements:getUnlocked', () => engine.getAchievements());
+ipcMain.handle('achievements:getDefinitions', () =>
+  ACHIEVEMENTS.map((a) => ({ id: a.id, name: a.name, description: a.description }))
+);
 ipcMain.handle('settings:get', () => engine.getSettings());
 ipcMain.handle('settings:update', (_evt, patch) => engine.updateSettings(patch));
 

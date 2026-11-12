@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('api', {
   deleteTask: (id) => ipcRenderer.invoke('tasks:delete', id),
   completeTask: (id) => ipcRenderer.invoke('tasks:complete', id),
   getPlayerState: () => ipcRenderer.invoke('player:getState'),
+  getStreakState: () => ipcRenderer.invoke('streak:getState'),
+  getAchievementDefinitions: () => ipcRenderer.invoke('achievements:getDefinitions'),
+  getUnlockedAchievements: () => ipcRenderer.invoke('achievements:getUnlocked'),
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
 
