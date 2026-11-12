@@ -31,13 +31,38 @@ function createWindow() {
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
   if (!app.isPackaged) {
-    mainWindow.loadURL(devServerUrl);
+    loadDevServerWithRetry(devServerUrl);
     if (process.env.OPEN_DEVTOOLS) {
       mainWindow.webContents.openDevTools({ mode: 'bottom' });
     }
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', '..', 'dist', 'index.html'));
   }
+}
+
+// Cheap insurance flagged by QA: if Electron races Vite's dev-server startup
+// (e.g. a packaging/CI path that skips the `wait-on tcp:5173` guard in the
+// `dev` script), loadURL fails silently onto a blank Chrome error page with
+// no recovery. Retry a few times with a short backoff instead.
+function loadDevServerWithRetry(url, attempt = 1) {
+  const MAX_ATTEMPTS = 10;
+  const RETRY_DELAY_MS = 300;
+
+  mainWindow.loadURL(url).catch(() => {
+    // loadURL's promise rejection is handled by did-fail-load below; this
+    // catch just prevents an unhandled rejection warning.
+  });
+
+  const onFailLoad = (_evt, errorCode) => {
+    if (errorCode === -3) return; // ERR_ABORTED (e.g. a legit navigation away)
+    mainWindow.webContents.removeListener('did-fail-load', onFailLoad);
+    if (attempt >= MAX_ATTEMPTS) {
+      console.error(`[main] dev server at ${url} unreachable after ${MAX_ATTEMPTS} attempts`);
+      return;
+    }
+    setTimeout(() => loadDevServerWithRetry(url, attempt + 1), RETRY_DELAY_MS);
+  };
+  mainWindow.webContents.once('did-fail-load', onFailLoad);
 }
 
 // ---- IPC: CRUD (request/response) ----
