@@ -3,28 +3,46 @@ import { AnimatePresence, motion } from 'framer-motion';
 import TaskList from './components/TaskList.jsx';
 import TaskForm from './components/TaskForm.jsx';
 import LevelHeader from './components/LevelHeader.jsx';
+import StreakDisplay from './components/StreakDisplay.jsx';
+import AchievementsGallery from './components/AchievementsGallery.jsx';
 import ToastStack from './components/ToastStack.jsx';
 import useToastQueue from './state/useToastQueue.js';
 
 export default function App() {
   const [tasks, setTasks] = useState([]);
   const [player, setPlayer] = useState({ totalXp: 0, currentLevel: 1 });
+  const [streak, setStreak] = useState(null);
+  const [achievementDefs, setAchievementDefs] = useState([]);
+  const [unlockedAchievements, setUnlockedAchievements] = useState({});
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [view, setView] = useState('quests'); // 'quests' | 'achievements'
+  const [justBroken, setJustBroken] = useState(false);
   const { toasts, pushToast } = useToastQueue();
 
   const refresh = useCallback(async () => {
-    const [t, p] = await Promise.all([window.api.getTasks(), window.api.getPlayerState()]);
+    const [t, p, s] = await Promise.all([
+      window.api.getTasks(),
+      window.api.getPlayerState(),
+      window.api.getStreakState(),
+    ]);
     setTasks(t);
     setPlayer(p);
+    setStreak(s);
+  }, []);
+
+  const refreshAchievements = useCallback(async () => {
+    const unlocked = await window.api.getUnlockedAchievements();
+    setUnlockedAchievements(unlocked);
   }, []);
 
   useEffect(() => {
     refresh();
+    refreshAchievements();
+    window.api.getAchievementDefinitions().then(setAchievementDefs);
 
-    // Engine event listeners, matching the locked contract. Streak/
-    // achievement events are wired now even though the M1 mock engine never
-    // fires them, so this is ready the moment engine-m1 (real logic) merges.
+    // Engine event listeners, matching the locked contract from
+    // @game-logic-engineer (now the real engine, swapped in for M2).
     const unsubs = [
       window.api.on('onTaskComplete', (payload) => {
         pushToast({
@@ -41,18 +59,23 @@ export default function App() {
       }),
       window.api.on('onStreakShieldConsumed', () => {
         pushToast({ type: 'shield', title: 'Shield used — streak saved!' });
+        refresh();
       }),
       window.api.on('onStreakBroken', () => {
         // Per @ux-designer: silent, visual-only. No toast queued here on
-        // purpose — see LevelHeader streak counter fade-to-0 treatment.
+        // purpose. Brief crimson-flash + "Fresh start" copy, then settle.
+        setJustBroken(true);
+        refresh();
+        setTimeout(() => setJustBroken(false), 600);
       }),
       window.api.on('onAchievementUnlocked', (payload) => {
         pushToast({ type: 'achievement', title: `Achievement: ${payload.name}` });
+        refreshAchievements();
       }),
     ];
 
     return () => unsubs.forEach((u) => u && u());
-  }, [refresh, pushToast]);
+  }, [refresh, refreshAchievements, pushToast]);
 
   const handleComplete = async (id) => {
     // Optimistic update: strike through immediately, revert on failure.
@@ -83,24 +106,47 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <LevelHeader player={player} />
-
-      <div className="quest-log">
-        <h2>Quest Log</h2>
-        <TaskList
-          tasks={tasks}
-          onComplete={handleComplete}
-          onEdit={(task) => {
-            setEditingTask(task);
-            setFormOpen(true);
-          }}
-          onDelete={handleDelete}
-        />
+      <div className="header-row">
+        <LevelHeader player={player} />
+        <StreakDisplay streak={streak} justBroken={justBroken} />
       </div>
 
-      <button className="fab" onClick={() => { setEditingTask(null); setFormOpen(true); }} aria-label="New Quest">
-        +
-      </button>
+      <nav className="main-nav">
+        <button
+          className={view === 'quests' ? 'nav-tab active' : 'nav-tab'}
+          onClick={() => setView('quests')}
+        >
+          Quest Log
+        </button>
+        <button
+          className={view === 'achievements' ? 'nav-tab active' : 'nav-tab'}
+          onClick={() => setView('achievements')}
+        >
+          Achievements
+        </button>
+      </nav>
+
+      {view === 'quests' ? (
+        <div className="quest-log">
+          <TaskList
+            tasks={tasks}
+            onComplete={handleComplete}
+            onEdit={(task) => {
+              setEditingTask(task);
+              setFormOpen(true);
+            }}
+            onDelete={handleDelete}
+          />
+        </div>
+      ) : (
+        <AchievementsGallery definitions={achievementDefs} unlocked={unlockedAchievements} />
+      )}
+
+      {view === 'quests' && (
+        <button className="fab" onClick={() => { setEditingTask(null); setFormOpen(true); }} aria-label="New Quest">
+          +
+        </button>
+      )}
 
       <AnimatePresence>
         {formOpen && (
